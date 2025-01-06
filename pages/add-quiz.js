@@ -330,9 +330,3 @@ Answer: a"
                 )}
               </Button>
             </form
-          </Card>
-        </div>
-      </div>
-    </div>
-  );
-}
