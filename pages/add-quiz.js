@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/router';
 import { Plus, ArrowRight } from 'lucide-react';
-import { supabase } from '@/lib/supabase';
+import { db } from '../lib/db';
 
 // Button Component
 const Button = ({ className = '', children, ...props }) => (
@@ -39,14 +39,14 @@ const Input = ({ label, error, ...props }) => (
 
 export default function AddQuiz() {
   const router = useRouter();
-  const [loading, setLoading] = useState(false);
-  const [subjects, setSubjects] = useState([]);
+  const [isLoading, setIsLoading] = useState(false);
   const [formData, setFormData] = useState({
     subject: '',
     quizName: '',
     questions: ''
   });
   const [errors, setErrors] = useState({});
+  const [subjects, setSubjects] = useState([]);
 
   useEffect(() => {
     loadSubjects();
@@ -54,16 +54,10 @@ export default function AddQuiz() {
 
   const loadSubjects = async () => {
     try {
-      const { data, error } = await supabase
-        .from('subjects')
-        .select('*')
-        .order('created_at', { ascending: false });
-
-      if (error) throw error;
-      setSubjects(data || []);
+      const loadedSubjects = await db.getSubjectsWithQuizzes();
+      setSubjects(loadedSubjects);
     } catch (error) {
       console.error('Error loading subjects:', error);
-      alert('حدث خطأ أثناء تحميل المواد');
     }
   };
 
@@ -73,13 +67,46 @@ export default function AddQuiz() {
       ...prev,
       [name]: value
     }));
-    // Clear error when user types
+    // مسح رسالة الخطأ عند الكتابة
     if (errors[name]) {
       setErrors(prev => ({
         ...prev,
         [name]: ''
       }));
     }
+  };
+
+  const validateForm = () => {
+    const newErrors = {};
+
+    if (!formData.subject.trim()) {
+      newErrors.subject = 'اسم المادة مطلوب';
+    }
+
+    if (!formData.quizName.trim()) {
+      newErrors.quizName = 'اسم الاختبار مطلوب';
+    }
+
+    if (!formData.questions.trim()) {
+      newErrors.questions = 'الأسئلة مطلوبة';
+    } else {
+      // التحقق من تنسيق الأسئلة
+      const questionBlocks = formData.questions.split(/\d+\.\s/).filter(block => block.trim());
+      for (const block of questionBlocks) {
+        const lines = block.split('\n').filter(line => line.trim());
+        if (lines.length < 6) { // سؤال + 4 خيارات + إجابة
+          newErrors.questions = 'تنسيق الأسئلة غير صحيح';
+          break;
+        }
+        if (!lines[lines.length - 1].match(/^Answer:\s*[a-dA-D]$/)) {
+          newErrors.questions = 'يجب تحديد الإجابة الصحيحة بتنسيق Answer: a/b/c/d';
+          break;
+        }
+      }
+    }
+
+    setErrors(newErrors);
+    return Object.keys(newErrors).length === 0;
   };
 
   const parseQuestions = (text) => {
@@ -113,103 +140,42 @@ export default function AddQuiz() {
       });
       
       return {
-        question_text: questionText,
+        question: questionText,
         options,
-        correct_answer: correctAnswer
+        correctAnswer
       };
     });
   };
 
-  const validateForm = () => {
-    const newErrors = {};
-    if (!formData.subject.trim()) {
-      newErrors.subject = 'اسم المادة مطلوب';
-    }
-    if (!formData.quizName.trim()) {
-      newErrors.quizName = 'اسم الاختبار مطلوب';
-    }
-    if (!formData.questions.trim()) {
-      newErrors.questions = 'الأسئلة مطلوبة';
-    }
-    setErrors(newErrors);
-    return Object.keys(newErrors).length === 0;
-  };
-
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (!validateForm()) return;
     
-    setLoading(true);
+    if (!validateForm()) {
+      return;
+    }
+
+    setIsLoading(true);
+    
     try {
-      // 1. التحقق من وجود المادة أو إنشاء مادة جديدة
-      let subject;
-      const { data: existingSubjects } = await supabase
-        .from('subjects')
-        .select('*')
-        .eq('name', formData.subject);
-
-      if (existingSubjects?.length > 0) {
-        subject = existingSubjects[0];
-      } else {
-        const { data: newSubject, error: subjectError } = await supabase
-          .from('subjects')
-          .insert([{ name: formData.subject }])
-          .select()
-          .single();
-
-        if (subjectError) throw subjectError;
-        subject = newSubject;
+      // التحقق من وجود المادة أو إنشاء مادة جديدة
+      let subject = subjects.find(s => s.name === formData.subject);
+      if (!subject) {
+        subject = await db.addSubject(formData.subject);
       }
 
-      // 2. إنشاء الاختبار
-      const { data: quiz, error: quizError } = await supabase
-        .from('quizzes')
-        .insert([{
-          subject_id: subject.id,
-          name: formData.quizName
-        }])
-        .select()
-        .single();
-
-      if (quizError) throw quizError;
-
-      // 3. إضافة الأسئلة
+      // إضافة الاختبار
       const parsedQuestions = parseQuestions(formData.questions);
-      
-      for (const q of parsedQuestions) {
-        // إضافة السؤال
-        const { data: question, error: questionError } = await supabase
-          .from('questions')
-          .insert([{
-            quiz_id: quiz.id,
-            question_text: q.question_text,
-            correct_answer: q.correct_answer
-          }])
-          .select()
-          .single();
-
-        if (questionError) throw questionError;
-
-        // إضافة الخيارات
-        const optionsToInsert = q.options.map(opt => ({
-          question_id: question.id,
-          letter: opt.letter,
-          option_text: opt.text
-        }));
-
-        const { error: optionsError } = await supabase
-          .from('options')
-          .insert(optionsToInsert);
-
-        if (optionsError) throw optionsError;
-      }
+      await db.addQuiz(subject.id, formData.quizName, parsedQuestions);
 
       router.push('/');
     } catch (error) {
-      console.error('Error saving quiz:', error);
-      alert('حدث خطأ أثناء حفظ الاختبار');
+      console.error('Error adding quiz:', error);
+      setErrors(prev => ({
+        ...prev,
+        submit: 'حدث خطأ أثناء حفظ الاختبار'
+      }));
     } finally {
-      setLoading(false);
+      setIsLoading(false);
     }
   };
 
@@ -218,10 +184,7 @@ export default function AddQuiz() {
       <div className="fixed top-0 left-0 right-0 bg-white shadow-sm z-10">
         <div className="max-w-4xl mx-auto px-4 py-3 flex justify-between items-center">
           <h1 className="text-lg font-semibold">إضافة اختبار جديد</h1>
-          <Button 
-            onClick={() => router.push('/')} 
-            className="flex items-center gap-2"
-          >
+          <Button onClick={() => router.push('/')} className="flex items-center gap-2">
             <ArrowRight className="w-4 h-4" />
             عودة
           </Button>
@@ -285,13 +248,25 @@ Answer: a"
                 )}
               </div>
 
+              {errors.submit && (
+                <div className="mb-4 p-3 rounded-lg bg-red-50 text-red-500">
+                  {errors.submit}
+                </div>
+              )}
+
               <Button 
                 type="submit" 
                 className="w-full"
-                disabled={loading}
+                disabled={isLoading}
               >
-                {loading ? (
-                  <span>جاري الحفظ...</span>
+                {isLoading ? (
+                  <span className="flex items-center gap-2">
+                    <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                    </svg>
+                    جاري الحفظ...
+                  </span>
                 ) : (
                   <>
                     <Plus className="w-4 h-4 ml-2" />
