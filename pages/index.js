@@ -33,9 +33,9 @@ export default function QuizApp() {
     // التحقق من الاتصال أولاً
     async function checkConnection() {
       try {
-        const isConnected = await db.checkConnection();
-        setConnectionStatus(isConnected ? 'متصل' : 'غير متصل');
-        if (isConnected) {
+        const connectionDetails = await db.checkConnectionDetails();
+        setConnectionStatus(connectionDetails.status === 'success' ? 'متصل' : 'حدث خطأ في الاتصال');
+        if (connectionDetails.status === 'success') {
           loadSubjects();
         }
       } catch (error) {
