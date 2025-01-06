@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Plus, FolderIcon, ArrowRight } from 'lucide-react';
 import { useRouter } from 'next/router';
+import db from '../lib/db'; // يفترض وجود ملف db.js به استدعاء قاعدة البيانات
 
 // Button Component
 const Button = ({ className = '', children, ...props }) => (
@@ -28,12 +29,29 @@ export default function QuizApp() {
   const [questions, setQuestions] = useState([]);
 
   useEffect(() => {
-    // تحميل المواد من localStorage
-    const saved = localStorage.getItem('subjects');
-    if (saved) {
-      setSubjects(JSON.parse(saved));
-    }
+    loadSubjects();
   }, []);
+
+  const loadSubjects = async () => {
+    try {
+      const subjects = await db.getSubjectsWithQuizzes();
+      setSubjects(subjects);
+    } catch (error) {
+      console.error('Error loading subjects:', error);
+      alert('حدث خطأ أثناء تحميل المواد');
+    }
+  };
+
+  const loadQuiz = async (quizId) => {
+    try {
+      const quiz = await db.getQuizWithQuestions(quizId);
+      setSelectedQuiz(quiz);
+      setQuestions(quiz.questions.map(q => ({ ...q, selectedAnswer: '' })));
+    } catch (error) {
+      console.error('Error loading quiz:', error);
+      alert('حدث خطأ أثناء تحميل الاختبار');
+    }
+  };
 
   const handleAnswerSelect = (questionIndex, answer) => {
     setQuestions(prevQuestions => {
@@ -81,7 +99,6 @@ export default function QuizApp() {
 
       <div className="pt-16 pb-6">
         <div className="max-w-4xl mx-auto px-4">
-          {/* عرض المواد */}
           {!selectedSubject && (
             <div className="grid gap-4 md:grid-cols-2">
               {subjects.map((subject) => (
@@ -104,7 +121,6 @@ export default function QuizApp() {
             </div>
           )}
 
-          {/* عرض الاختبارات داخل المادة */}
           {selectedSubject && !selectedQuiz && (
             <>
               <div className="mb-4 flex items-center gap-2">
@@ -122,85 +138,12 @@ export default function QuizApp() {
                   <Card 
                     key={quiz.id} 
                     className="p-4 cursor-pointer hover:bg-gray-50"
-                    onClick={() => {
-                      setSelectedQuiz(quiz);
-                      setQuestions(quiz.questions.map(q => ({ ...q, selectedAnswer: '' })));
-                    }}
+                    onClick={() => loadQuiz(quiz.id)}
                   >
                     <h3 className="font-semibold">{quiz.name}</h3>
                     <p className="text-sm text-gray-600">
                       {quiz.questions.length} سؤال
                     </p>
-                  </Card>
-                ))}
-              </div>
-            </>
-          )}
-
-          {/* عرض الأسئلة */}
-          {selectedQuiz && questions.length > 0 && (
-            <>
-              <div className="mb-4 flex items-center gap-2">
-                <Button 
-                  onClick={() => {
-                    setSelectedQuiz(null);
-                    setQuestions([]);
-                  }}
-                  className="bg-gray-500 hover:bg-gray-600"
-                >
-                  <ArrowRight className="w-4 h-4 ml-1" />
-                  عودة للاختبارات
-                </Button>
-                <h2 className="text-xl font-semibold">{selectedQuiz.name}</h2>
-              </div>
-              <div className="space-y-4">
-                {questions.map((question, questionIndex) => (
-                  <Card key={questionIndex} className="p-4">
-                    <div className="mb-4 text-base md:text-lg font-medium">
-                      {question.question}
-                    </div>
-                    <div className="space-y-3">
-                      {question.options.map((option) => {
-                        const isSelected = question.selectedAnswer === option.letter;
-                        const isCorrect = question.correctAnswer === option.letter;
-                        const showResult = question.selectedAnswer !== '';
-                        
-                        let bgColor = 'bg-white';
-                        if (showResult && isSelected) {
-                          bgColor = isCorrect ? 'bg-green-50' : 'bg-red-50';
-                        }
-                        
-                        return (
-                          <div
-                            key={option.letter}
-                            onClick={() => handleAnswerSelect(questionIndex, option.letter)}
-                            className={`p-3 border rounded-lg cursor-pointer ${bgColor} 
-                              hover:bg-gray-50 transition-colors`}
-                          >
-                            <div className="flex items-center gap-3">
-                              <div className="min-w-[24px] font-medium">
-                                {option.letter})
-                              </div>
-                              <div>{option.text}</div>
-                              {showResult && isSelected && (
-                                <div className="mr-auto">
-                                  {isCorrect ? 
-                                    <span className="text-green-600 text-xl">✓</span> : 
-                                    <span className="text-red-600 text-xl">✗</span>
-                                  }
-                                </div>
-                              )}
-                            </div>
-                          </div>
-                        );
-                      })}
-                    </div>
-                    {question.selectedAnswer && 
-                     question.selectedAnswer !== question.correctAnswer && (
-                      <div className="mt-4 text-sm text-red-600 p-2 bg-red-50 rounded-lg">
-                        الإجابة الصحيحة هي: {question.correctAnswer}
-                      </div>
-                    )}
                   </Card>
                 ))}
               </div>
