@@ -39,7 +39,7 @@ const Input = ({ label, error, ...props }) => (
 
 export default function AddQuiz() {
   const router = useRouter();
-  const [isLoading, setIsLoading] = useState(false);
+  const [loading, setLoading] = useState(false);
   const [subjects, setSubjects] = useState([]);
   const [formData, setFormData] = useState({
     subject: '',
@@ -63,7 +63,7 @@ export default function AddQuiz() {
       setSubjects(data || []);
     } catch (error) {
       console.error('Error loading subjects:', error);
-      alert('حدث خطأ أثناء تحميل المواد الدراسية');
+      alert('حدث خطأ أثناء تحميل المواد');
     }
   };
 
@@ -73,7 +73,7 @@ export default function AddQuiz() {
       ...prev,
       [name]: value
     }));
-    // مسح رسالة الخطأ عند الكتابة
+    // Clear error when user types
     if (errors[name]) {
       setErrors(prev => ({
         ...prev,
@@ -115,14 +115,13 @@ export default function AddQuiz() {
       return {
         question_text: questionText,
         options,
-        correct_answer: correctAnswer,
+        correct_answer: correctAnswer
       };
     });
   };
 
   const validateForm = () => {
     const newErrors = {};
-    
     if (!formData.subject.trim()) {
       newErrors.subject = 'اسم المادة مطلوب';
     }
@@ -132,38 +131,29 @@ export default function AddQuiz() {
     if (!formData.questions.trim()) {
       newErrors.questions = 'الأسئلة مطلوبة';
     }
-
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    if (!validateForm()) return;
     
-    if (!validateForm()) {
-      return;
-    }
-
-    setIsLoading(true);
-    
+    setLoading(true);
     try {
-      // 1. التحقق من وجود المادة أو إنشاؤها
+      // 1. التحقق من وجود المادة أو إنشاء مادة جديدة
       let subject;
       const { data: existingSubjects } = await supabase
         .from('subjects')
-        .select()
-        .eq('name', formData.subject)
-        .limit(1);
+        .select('*')
+        .eq('name', formData.subject);
 
-      if (existingSubjects && existingSubjects.length > 0) {
+      if (existingSubjects?.length > 0) {
         subject = existingSubjects[0];
       } else {
         const { data: newSubject, error: subjectError } = await supabase
           .from('subjects')
-          .insert([{ 
-            name: formData.subject,
-            created_by: 'MOLOORD232'
-          }])
+          .insert([{ name: formData.subject }])
           .select()
           .single();
 
@@ -176,8 +166,7 @@ export default function AddQuiz() {
         .from('quizzes')
         .insert([{
           subject_id: subject.id,
-          name: formData.quizName,
-          created_by: 'MOLOORD232'
+          name: formData.quizName
         }])
         .select()
         .single();
@@ -194,8 +183,7 @@ export default function AddQuiz() {
           .insert([{
             quiz_id: quiz.id,
             question_text: q.question_text,
-            correct_answer: q.correct_answer,
-            created_by: 'MOLOORD232'
+            correct_answer: q.correct_answer
           }])
           .select()
           .single();
@@ -206,8 +194,7 @@ export default function AddQuiz() {
         const optionsToInsert = q.options.map(opt => ({
           question_id: question.id,
           letter: opt.letter,
-          option_text: opt.text,
-          created_by: 'MOLOORD232'
+          option_text: opt.text
         }));
 
         const { error: optionsError } = await supabase
@@ -222,7 +209,7 @@ export default function AddQuiz() {
       console.error('Error saving quiz:', error);
       alert('حدث خطأ أثناء حفظ الاختبار');
     } finally {
-      setIsLoading(false);
+      setLoading(false);
     }
   };
 
@@ -233,9 +220,9 @@ export default function AddQuiz() {
           <h1 className="text-lg font-semibold">إضافة اختبار جديد</h1>
           <Button 
             onClick={() => router.push('/')} 
-            className="bg-gray-500 hover:bg-gray-600"
+            className="flex items-center gap-2"
           >
-            <ArrowRight className="w-4 h-4 ml-1" />
+            <ArrowRight className="w-4 h-4" />
             عودة
           </Button>
         </div>
@@ -300,28 +287,11 @@ Answer: a"
 
               <Button 
                 type="submit" 
-                className="w-full" 
-                disabled={isLoading}
+                className="w-full"
+                disabled={loading}
               >
-                {isLoading ? (
-                  <span className="flex items-center justify-center">
-                    <svg className="animate-spin h-5 w-5 mr-3" viewBox="0 0 24 24">
-                      <circle
-                        className="opacity-25"
-                        cx="12"
-                        cy="12"
-                        r="10"
-                        stroke="currentColor"
-                        strokeWidth="4"
-                      />
-                      <path
-                        className="opacity-75"
-                        fill="currentColor"
-                        d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
-                      />
-                    </svg>
-                    جاري الحفظ...
-                  </span>
+                {loading ? (
+                  <span>جاري الحفظ...</span>
                 ) : (
                   <>
                     <Plus className="w-4 h-4 ml-2" />
@@ -329,4 +299,10 @@ Answer: a"
                   </>
                 )}
               </Button>
-            </form
+            </form>
+          </Card>
+        </div>
+      </div>
+    </div>
+  );
+}
