@@ -1,12 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import { Plus, FolderIcon, ArrowRight } from 'lucide-react';
 import { useRouter } from 'next/router';
-import db from '../lib/db'; // يفترض وجود ملف db.js به استدعاء قاعدة البيانات
+import db from '../lib/db';
 
 // Button Component
 const Button = ({ className = '', children, ...props }) => (
   <button
-    className={`inline-flex items-center justify-center rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 bg-blue-500 text-white hover:bg-blue-600 h-10 px-4 py-2 ${className}`}
+    className={`inline-flex items-center justify-center rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${className}`}
     {...props}
   >
     {children}
@@ -23,15 +23,31 @@ const Card = ({ className = '', ...props }) => (
 
 export default function QuizApp() {
   const router = useRouter();
+  const [connectionStatus, setConnectionStatus] = useState('جاري التحقق...');
   const [subjects, setSubjects] = useState([]);
   const [selectedSubject, setSelectedSubject] = useState(null);
   const [selectedQuiz, setSelectedQuiz] = useState(null);
   const [questions, setQuestions] = useState([]);
 
   useEffect(() => {
-    loadSubjects();
+    // التحقق من الاتصال أولاً
+    async function checkConnection() {
+      try {
+        const isConnected = await db.checkConnection();
+        setConnectionStatus(isConnected ? 'متصل' : 'غير متصل');
+        if (isConnected) {
+          loadSubjects();
+        }
+      } catch (error) {
+        console.error('خطأ في الاتصال:', error);
+        setConnectionStatus('حدث خطأ في الاتصال');
+      }
+    }
+    
+    checkConnection();
   }, []);
 
+  // هنا كان يبدأ "باقي الكود كما هو"
   const loadSubjects = async () => {
     try {
       const subjects = await db.getSubjectsWithQuizzes();
@@ -83,6 +99,11 @@ export default function QuizApp() {
       <div className="fixed top-0 left-0 right-0 bg-white shadow-sm z-10">
         <div className="max-w-4xl mx-auto px-4 py-3 flex justify-between items-center">
           <h1 className="text-lg font-semibold">اختبارات تفاعلية</h1>
+          <div className={`text-sm ${
+            connectionStatus === 'متصل' ? 'text-green-600' : 'text-red-600'
+          }`}>
+            حالة الاتصال: {connectionStatus}
+          </div>
           <div className="flex gap-2">
             {questions.length > 0 && (
               <Button onClick={shareQuiz} className="flex items-center gap-2">
