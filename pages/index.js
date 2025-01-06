@@ -1,6 +1,5 @@
-// pages/index.js
 import React, { useState, useEffect } from 'react';
-import { Plus, Book, ChevronLeft } from 'lucide-react';
+import { Plus, FolderIcon, ArrowRight } from 'lucide-react';
 import { useRouter } from 'next/router';
 
 // Button Component
@@ -30,9 +29,9 @@ export default function QuizApp() {
 
   useEffect(() => {
     // تحميل المواد من localStorage
-    const savedSubjects = localStorage.getItem('subjects');
-    if (savedSubjects) {
-      setSubjects(JSON.parse(savedSubjects));
+    const saved = localStorage.getItem('subjects');
+    if (saved) {
+      setSubjects(JSON.parse(saved));
     }
   }, []);
 
@@ -48,7 +47,7 @@ export default function QuizApp() {
   };
 
   const shareQuiz = () => {
-    if (!questions.length) return;
+    if (questions.length === 0) return;
     
     const quizText = questions.map((q, i) => {
       const optionsText = q.options.map(opt => 
@@ -61,91 +60,99 @@ export default function QuizApp() {
     alert('تم نسخ الاختبار! يمكنك لصقه وإرساله لأصدقائك');
   };
 
-  const selectSubject = (subject) => {
-    setSelectedSubject(subject);
-    setSelectedQuiz(null);
-    setQuestions([]);
-  };
-
-  const selectQuiz = (quiz) => {
-    setSelectedQuiz(quiz);
-    setQuestions(quiz.questions);
-  };
-
   return (
     <div className="min-h-screen bg-gray-50">
       <div className="fixed top-0 left-0 right-0 bg-white shadow-sm z-10">
         <div className="max-w-4xl mx-auto px-4 py-3 flex justify-between items-center">
-          <div className="flex items-center gap-2">
-            {selectedSubject && (
-              <button 
-                onClick={() => selectSubject(null)} 
-                className="text-gray-600 hover:text-gray-800"
-              >
-                <ChevronLeft className="w-5 h-5" />
-              </button>
+          <h1 className="text-lg font-semibold">اختبارات تفاعلية</h1>
+          <div className="flex gap-2">
+            {questions.length > 0 && (
+              <Button onClick={shareQuiz} className="flex items-center gap-2">
+                <Plus className="w-4 h-4" />
+                مشاركة
+              </Button>
             )}
-            <h1 className="text-lg font-semibold">
-              {selectedSubject ? selectedSubject.name : 'المواد الدراسية'}
-            </h1>
+            <Button onClick={() => router.push('/add-quiz')} className="bg-green-500 hover:bg-green-600">
+              إضافة اختبار
+            </Button>
           </div>
-          <Button onClick={() => router.push('/add-quiz')} className="flex items-center gap-2">
-            <Plus className="w-4 h-4" />
-            اختبار جديد
-          </Button>
         </div>
       </div>
 
       <div className="pt-16 pb-6">
         <div className="max-w-4xl mx-auto px-4">
-          {!selectedSubject ? (
-            // عرض قائمة المواد
+          {/* عرض المواد */}
+          {!selectedSubject && (
             <div className="grid gap-4 md:grid-cols-2">
               {subjects.map((subject) => (
                 <Card 
-                  key={subject.id}
-                  className="p-4 cursor-pointer hover:shadow-md transition-shadow"
-                  onClick={() => selectSubject(subject)}
+                  key={subject.id} 
+                  className="p-4 cursor-pointer hover:bg-gray-50"
+                  onClick={() => setSelectedSubject(subject)}
                 >
                   <div className="flex items-center gap-3">
-                    <Book className="w-5 h-5 text-blue-500" />
+                    <FolderIcon className="w-6 h-6 text-blue-500" />
                     <div>
                       <h2 className="font-semibold">{subject.name}</h2>
                       <p className="text-sm text-gray-600">
-                        {subject.quizzes.length} اختبارات
+                        {subject.quizzes.length} اختبار
                       </p>
                     </div>
                   </div>
                 </Card>
               ))}
             </div>
-          ) : !selectedQuiz ? (
-            // عرض قائمة الاختبارات في المادة المحددة
-            <div className="grid gap-4 md:grid-cols-2">
-              {selectedSubject.quizzes.map((quiz) => (
-                <Card 
-                  key={quiz.id}
-                  className="p-4 cursor-pointer hover:shadow-md transition-shadow"
-                  onClick={() => selectQuiz(quiz)}
-                >
-                  <h2 className="font-semibold mb-2">{quiz.name}</h2>
-                  <p className="text-sm text-gray-600">
-                    {quiz.questions.length} أسئلة
-                  </p>
-                  <p className="text-xs text-gray-500 mt-2">
-                    {new Date(quiz.createdAt).toLocaleDateString('ar-EG')}
-                  </p>
-                </Card>
-              ))}
-            </div>
-          ) : (
-            // عرض الاختبار المحدد
+          )}
+
+          {/* عرض الاختبارات داخل المادة */}
+          {selectedSubject && !selectedQuiz && (
             <>
-              <div className="mb-4 flex justify-between items-center">
-                <h2 className="font-semibold text-xl">{selectedQuiz.name}</h2>
-                <Button onClick={shareQuiz}>مشاركة</Button>
+              <div className="mb-4 flex items-center gap-2">
+                <Button 
+                  onClick={() => setSelectedSubject(null)}
+                  className="bg-gray-500 hover:bg-gray-600"
+                >
+                  <ArrowRight className="w-4 h-4 ml-1" />
+                  عودة
+                </Button>
+                <h2 className="text-xl font-semibold">{selectedSubject.name}</h2>
               </div>
-              
+              <div className="grid gap-4 md:grid-cols-2">
+                {selectedSubject.quizzes.map((quiz) => (
+                  <Card 
+                    key={quiz.id} 
+                    className="p-4 cursor-pointer hover:bg-gray-50"
+                    onClick={() => {
+                      setSelectedQuiz(quiz);
+                      setQuestions(quiz.questions.map(q => ({ ...q, selectedAnswer: '' })));
+                    }}
+                  >
+                    <h3 className="font-semibold">{quiz.name}</h3>
+                    <p className="text-sm text-gray-600">
+                      {quiz.questions.length} سؤال
+                    </p>
+                  </Card>
+                ))}
+              </div>
+            </>
+          )}
+
+          {/* عرض الأسئلة */}
+          {selectedQuiz && questions.length > 0 && (
+            <>
+              <div className="mb-4 flex items-center gap-2">
+                <Button 
+                  onClick={() => {
+                    setSelectedQuiz(null);
+                    setQuestions([]);
+                  }}
+                  className="bg-gray-500 hover:bg-gray-600"
+                >
+                  <ArrowRight className="w-4 h-4 ml-1" />
+                  عودة للاختبارات
+                </Button>
+                <h2 className="text-xl font-semibold">{selectedQuiz.name}</h2>
+              </div>
               <div className="space-y-4">
                 {questions.map((question, questionIndex) => (
                   <Card key={questionIndex} className="p-4">
