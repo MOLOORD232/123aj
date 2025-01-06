@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Plus, FolderIcon, ArrowRight } from 'lucide-react';
 import { useRouter } from 'next/router';
-import db from '../lib/db';
+import { db } from '../lib/db';  // صحيح
 
 // Button Component
 const Button = ({ className = '', children, ...props }) => (
